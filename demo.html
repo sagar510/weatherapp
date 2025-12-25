@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Weather App</title>
+    <style>
+        /* Basic Styling */
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #f0f2f5;
+        }
+
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            text-align: center;
+        }
+
+        input {
+            padding: 10px;
+            width: 80%;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        #result {
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .loading {
+            color: #888;
+            font-style: italic;
+        }
+
+        .weather-icon {
+            font-size: 3rem;
+            display: block;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <h2>🌤️ AI Weather</h2>
+        <input type="text" id="cityInput" placeholder="Enter city (e.g. Pune)">
+        <button onclick="getWeather()">Get Forecast</button>
+        <div id="result"></div>
+        <button onclick="checkModels()">Check Available Models</button>
+    </div>
+
+    <script type="module">
+        // 1. Import the Gemini SDK directly from Google's CDN
+        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+        // 2. Initialize Gemini (Replace YOUR_API_KEY with your actual key)
+        const API_KEY = "AIzaSyADSfEAWce8WrY81CAiLAqewTPg2BAsksA";
+        const genAI = new GoogleGenerativeAI(API_KEY);
+
+        // 3. The Function to call Gemini
+        window.getWeather = async function () {
+            const city = document.getElementById('cityInput').value;
+            const resultDiv = document.getElementById('result');
+
+            if (!city) return alert("Please enter a city!");
+
+            resultDiv.innerHTML = '<p class="loading">Consulting the clouds...</p>';
+
+            try {
+                // Select the model
+                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+                // 4. The Magic Prompt: We force Gemini to reply in JSON
+                const prompt = `
+                You are a weather backend. 
+                Generate a realistic current weather report for ${city}.
+                Return ONLY a valid JSON object. Do not include any markdown formatting like \`\`\`json.
+                
+                The JSON must strictly follow this structure:
+                {
+                    "temperature": number (in Celsius),
+                    "condition": string (e.g., "Sunny", "Rainy"),
+                    "humidity": number (percentage),
+                    "fun_fact": string (a short fun fact about the weather in this city),
+                    "emoji": string (an emoji matching the weather)
+                }
+            `;
+
+                // 5. Generate content
+                const result = await model.generateContent(prompt);
+                const responseText = result.response.text();
+
+                // 6. Parse the text into a real JavaScript Object
+                // Sometimes Gemini wraps code in ```json ... ```, so we clean it up just in case
+                const cleanJson = responseText.replace(/```json|```/g, '').trim();
+                const weatherData = JSON.parse(cleanJson);
+
+                // 7. Update the UI
+                resultDiv.innerHTML = `
+                <div style="text-align:center">
+                    <span class="weather-icon">${weatherData.emoji}</span>
+                    <h3>${weatherData.temperature}°C</h3>
+                    <p><strong>${weatherData.condition}</strong></p>
+                    <p>💧 Humidity: ${weatherData.humidity}%</p>
+                    <hr>
+                    <p style="font-size:0.9em; color:#555"><em>${weatherData.fun_fact}</em></p>
+                </div>
+            `;
+
+            } catch (error) {
+                console.error(error);
+                resultDiv.innerHTML = `<p style="color:red">Error: Could not fetch weather.</p>`;
+            }
+        }
+
+
+        window.checkModels = async function () {
+            try {
+                // We fetch the list of models available to your API key
+                // Note: We use the REST API url directly for this test to keep it simple
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
+                const data = await response.json();
+
+                console.log("✅ AVAILABLE MODELS:");
+                data.models.forEach(model => {
+                    // Only show models that support 'generateContent'
+                    if (model.supportedGenerationMethods.includes("generateContent")) {
+                        console.log(model.name.replace("models/", ""));
+                    }
+                });
+                alert("Check your browser console (F12) for the list of valid model names!");
+            } catch (error) {
+                console.error("Error listing models:", error);
+            }
+        }
+    </script>
+
+</body>
+
+</html>
